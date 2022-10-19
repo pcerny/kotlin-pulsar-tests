@@ -1,0 +1,45 @@
+version: '3.7'
+services:
+  pulsar:
+    image: apachepulsar/pulsar:2.9.2
+    ports:
+      - "6650:6650"
+      - "8080:8080"
+    volumes:
+      - pulsar-data:/pulsar/data
+    environment:
+      PULSAR_LOG_LEVEL: warn
+      PULSAR_MEM: '-Xms128m -Xmx128m -XX:MaxDirectMemorySize=256m'
+      subscriptionExpirationTimeMinutes: "5"
+      journalMaxBackups: "0"
+      systemTopicEnabled: "true"
+      topicLevelPoliciesEnabled: "true"
+    command: >
+      /bin/bash -c
+      "bin/apply-config-from-env.py conf/standalone.conf
+      && bin/pulsar standalone -nfw -nss"
+
+  pulsar-create-namespace:
+    image: apachepulsar/pulsar:2.9.2
+    depends_on:
+      - pulsar
+    entrypoint: |
+      sh -c '
+      until curl --output /dev/null -fs http://pulsar:8080/admin/v2/tenants ; do
+        echo waiting for pulsar to start...
+        sleep 5;
+      done;
+      bin/pulsar-admin --admin-url http://pulsar:8080 namespaces create public/default || true;
+      '
+
+  pulsar-express:
+    image: bbonnin/pulsar-express
+    depends_on:
+      - pulsar
+    ports:
+      - "3060:3000"
+    environment:
+      PE_CONNECTION_URL: http://pulsar:8080
+
+volumes:
+  pulsar-data:
